@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Status Gizi Balita - Lengkap</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+<style>
+body { font-family: 'Inter', sans-serif; background:#f4f6f9; margin:0; }
+header { background:#4e73df; color:white; padding:20px; text-align:center; }
+
+form {
+  background:white; max-width:500px; margin:20px auto;
+  padding:20px; border-radius:12px; box-shadow:0 5px 15px rgba(0,0,0,0.1);
+}
+input, select, button {
+  width:100%; padding:10px; margin-top:8px;
+  border-radius:8px; border:1px solid #ccc;
+}
+button {
+  background:#4e73df; color:white; border:none; font-weight:600;
+}
+button:hover { background:#2e59d9; }
+
+.dashboard {
+  display:flex; flex-wrap:wrap; justify-content:center;
+  gap:15px; margin:20px;
+}
+.card {
+  flex:1; min-width:150px; padding:15px;
+  border-radius:10px; color:white; text-align:center;
+}
+.total { background:#4e73df; }
+.kurang { background:#e74a3b; }
+.baik { background:#1cc88a; }
+.lebih { background:#f6c23e; }
+
+#map {
+  height:400px; width:90%; margin:20px auto;
+  border-radius:12px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+<h2>Aplikasi Status Gizi Balita</h2>
+</header>
+
+<!-- DASHBOARD -->
+<div class="dashboard">
+  <div class="card total">Total<br><span id="total">0</span></div>
+  <div class="card kurang">Kurang<br><span id="kurang">0</span></div>
+  <div class="card baik">Baik<br><span id="baik">0</span></div>
+  <div class="card lebih">Lebih<br><span id="lebih">0</span></div>
+</div>
+
+<!-- FORM -->
+<form>
+<input type="text" id="nama" placeholder="Nama Balita">
+<input type="text" id="ortu" placeholder="Nama Orang Tua">
+<input type="date" id="tgl">
+<select id="jk">
+<option value="L">Laki-laki</option>
+<option value="P">Perempuan</option>
+</select>
+<input type="number" id="bb" placeholder="Berat Badan (kg)">
+<input type="number" id="tb" placeholder="Tinggi Badan (cm)">
+<button type="button" onclick="simpan()">Simpan Data</button>
+</form>
+
+<!-- MAP -->
+<h3 style="text-align:center;">Peta Sebaran</h3>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<script>
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxCZu14Yj2CGqXiTKqBqFLnfseSWQPLpd9Xo26dH7sxfw0D56UPN6YVvj0IqwA4zH1_/exec"; // GANTI INI
+
+let data = [];
+
+let map = L.map('map').setView([-3.3,114.6], 11);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+// ================= HITUNG UMUR
+function umur(tgl){
+  let d=new Date(tgl);
+  let now=new Date();
+  return (now.getFullYear()-d.getFullYear())*12+(now.getMonth()-d.getMonth());
+}
+
+// ================= STATUS SEDERHANA
+function status(bb){
+  if(bb < 7) return "Gizi Kurang";
+  if(bb > 12) return "Gizi Lebih";
+  return "Gizi Baik";
+}
+
+// ================= DASHBOARD
+function update(){
+  document.getElementById("total").innerText=data.length;
+  document.getElementById("kurang").innerText=data.filter(x=>x.s=="Gizi Kurang").length;
+  document.getElementById("baik").innerText=data.filter(x=>x.s=="Gizi Baik").length;
+  document.getElementById("lebih").innerText=data.filter(x=>x.s=="Gizi Lebih").length;
+}
+
+// ================= LOKASI
+function getLokasi(){
+  return new Promise(res=>{
+    navigator.geolocation.getCurrentPosition(
+      pos=>res(pos.coords),
+      ()=>res(null)
+    );
+  });
+}
+
+// ================= SIMPAN
+async function simpan(){
+
+  let nama=document.getElementById("nama").value;
+  let ortu=document.getElementById("ortu").value;
+  let tgl=document.getElementById("tgl").value;
+  let jk=document.getElementById("jk").value;
+  let bb=parseFloat(document.getElementById("bb").value);
+  let tb=parseFloat(document.getElementById("tb").value);
+
+  let u=umur(tgl);
+  let s=status(bb);
+
+  let loc=await getLokasi();
+
+  // SIMPAN LOKAL
+  data.push({nama, s});
+  update();
+
+  // KIRIM KE SPREADSHEET
+  fetch(WEB_APP_URL,{
+    method:"POST",
+    body:JSON.stringify({
+      nama, ortu, tgl, umur:u, jk, bb, tb, status:s,
+      lat: loc?loc.latitude:"",
+      lng: loc?loc.longitude:""
+    })
+  });
+
+  // TAMPILKAN DI MAP
+  if(loc){
+    let warna = s=="Gizi Kurang"?"red":(s=="Gizi Lebih"?"orange":"green");
+
+    L.circleMarker([loc.latitude,loc.longitude],{
+      color:warna, radius:8
+    }).addTo(map)
+    .bindPopup(`<b>${nama}</b><br>${s}`);
+  }
+
+  alert("Data berhasil disimpan!");
+}
+</script>
+
+</body>
+</html>
